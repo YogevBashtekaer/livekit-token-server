@@ -1,0 +1,387 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LiveKit Unity Stream</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+
+    <style>
+        body {
+            background: #181818;
+            color: white;
+            font-family: Arial;
+            text-align: center;
+        }
+
+        video {
+            width: 80%;
+            max-width: 1000px;
+            background: black;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 25px;
+            cursor: pointer;
+        }
+
+        #cameraButtons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 20px;
+            flex-wrap: wrap;
+        }
+
+        #cameraButtons button {
+            padding: 12px 22px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #444;
+            color: white;
+        }
+
+        #cameraButtons button.active {
+            background: #1685ff;
+        }
+
+        #qualitySelect {
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
+        #videoContainer video {
+            width: 80%;
+            max-width: 1000px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Unity LiveKit Stream</h2>
+
+    <button onclick="connectViewer()">Connect Viewer</button>
+
+    <p id="status">Waiting for connection...</p>
+
+    <div id="cameraButtons"></div>
+
+    <div style="margin: 15px 0;">
+        <label for="qualitySelect">Stream Quality:</label>
+
+        <select id="qualitySelect">
+            <option value="LOW">Low</option>
+            <option value="MEDIUM" selected>Medium</option>
+            <option value="HIGH">High</option>
+        </select>
+    </div>
+
+    <div id="videoContainer"></div>
+
+    <script>
+
+        const pageParams = new URLSearchParams(window.location.search);
+        const defaultRoom =
+            pageParams.get("room") || "unity-test-room";
+
+        let room;
+
+        const cameraPublications = new Map();
+        const cameraTracks = new Map();
+
+        let selectedCamera = null;
+
+        let selectedQuality = LivekitClient.VideoQuality.MEDIUM;
+
+        const videoContainer =
+            document.getElementById("videoContainer");
+
+        const cameraButtons =
+            document.getElementById("cameraButtons");
+
+        const qualitySelect =
+            document.getElementById("qualitySelect");
+
+        qualitySelect.addEventListener("change", function () {
+            changeStreamQuality(this.value);
+        });
+
+        function addCameraPublication(publication) {
+
+            if (publication.kind !== LivekitClient.Track.Kind.Video)
+                return;
+
+            const trackName = publication.trackName;
+
+            if (!trackName || !trackName.startsWith("camera-"))
+                return;
+
+            cameraPublications.set(trackName, publication);
+
+            const cameraNumber =
+                trackName.replace("camera-", "");
+
+            let button =
+                document.getElementById("btn-" + trackName);
+
+            if (!button) {
+
+                button = document.createElement("button");
+
+                button.id = "btn-" + trackName;
+
+                button.textContent = "Camera " + cameraNumber;
+
+                button.onclick = () => selectCamera(trackName);
+
+                cameraButtons.appendChild(button);
+            }
+
+            console.log("Camera available:", trackName);
+
+            if (trackName === "camera-1" && selectedCamera === null) {
+                console.log("Auto selecting Camera 1...");
+                selectCamera("camera-1");
+            }
+
+            console.log(
+                "Camera:", trackName,
+                "Simulcast:", publication.simulcasted,
+                "Dimensions:", publication.dimensions
+            );
+        }
+
+function selectCamera(trackName) {
+
+    console.log("Requested subscription:", trackName);
+
+    if (selectedCamera && selectedCamera !== trackName) {
+
+        const previousPublication =
+            cameraPublications.get(selectedCamera);
+
+        if (previousPublication) {
+            previousPublication.setSubscribed(false);
+        }
+    }
+
+    selectedCamera = trackName;
+
+    const publication = cameraPublications.get(trackName);
+
+    if (!publication) {
+        console.warn("Publication not found:", trackName);
+        return;
+    }
+
+    publication.setVideoQuality(selectedQuality);
+
+    console.log(
+        "Applying saved quality:",
+        selectedQuality,
+        "Camera:",
+        trackName
+    );
+
+    publication.setSubscribed(true);
+
+    console.log("Camera subscription requested:", trackName);
+}
+
+        function changeStreamQuality(quality) {
+
+            selectedQuality =
+                LivekitClient.VideoQuality[quality];
+
+            console.log("Selected Quality:", quality);
+
+            if (!selectedCamera)
+                return;
+
+            const publication =
+                cameraPublications.get(selectedCamera);
+
+            if (publication && publication.isSubscribed) {
+
+                publication.setVideoQuality(selectedQuality);
+
+                console.log(
+                    "Quality applied:",
+                    quality,
+                    "Camera:",
+                    selectedCamera
+                );
+
+            }
+        }
+
+        function displayCamera(track, publication) {
+
+            const trackName = publication.trackName;
+
+            if (trackName !== selectedCamera)
+                return;
+
+            videoContainer.innerHTML = "";
+
+            const videoElement = track.attach();
+
+            videoElement.autoplay = true;
+            videoElement.playsInline = true;
+
+            videoElement.style.width = "100%";
+            videoElement.style.height = "auto";
+            videoElement.style.transform = "scaleY(-1)";
+
+            videoContainer.appendChild(videoElement);
+
+            console.log("Displaying:", trackName);
+        }
+
+        async function connectViewer() {
+
+            try {
+
+                document.getElementById("status").innerText =
+                    "Getting token...";
+
+                const response = await fetch("/token", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            roomName: defaultRoom,
+                            identity: "browser-viewer-" +
+                                Date.now() + "-" +
+                                Math.floor(Math.random() * 10000)
+                        })
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("Token request failed");
+                }
+
+                const data = await response.json();
+
+                room = new LivekitClient.Room();
+
+                room.on(
+                    LivekitClient.RoomEvent.TrackPublished,
+                    (publication, participant) => {
+                        addCameraPublication(publication);
+                    }
+                );
+
+                room.on(
+                    LivekitClient.RoomEvent.TrackSubscribed,
+                    (track, publication, participant) => {
+
+                        if (track.kind !== LivekitClient.Track.Kind.Video)
+                            return;
+
+                        cameraTracks.set(
+                            publication.trackName,
+                            track
+                        );
+
+                        console.log(
+                            "SUBSCRIBED:",
+                            publication.trackName
+                        );
+
+                        if (
+                            publication.trackName === selectedCamera
+                        ) {
+
+                            publication.setVideoQuality(selectedQuality);
+
+                            console.log(
+                                "Quality applied after subscription:",
+                                selectedQuality
+                            );
+
+                           setTimeout(() => {
+    const settings = track.mediaStreamTrack.getSettings();
+
+    console.log(
+        "ACTUAL RECEIVED RESOLUTION:",
+        publication.trackName,
+        settings.width + "x" + settings.height
+    );
+
+}, 2000);
+
+                        }
+
+                        displayCamera(track, publication);
+
+                    }
+                );
+
+                room.on(
+                    LivekitClient.RoomEvent.TrackUnsubscribed,
+                    (track, publication, participant) => {
+
+                        const trackName = publication.trackName;
+
+                        track.detach();
+
+                        cameraTracks.delete(trackName);
+
+                        console.log(
+                            "UNSUBSCRIBED:",
+                            trackName
+                        );
+
+                        if (trackName === selectedCamera) {
+                            videoContainer.innerHTML = "";
+                        }
+
+                    }
+                );
+
+                await room.connect(
+                    data.serverUrl,
+                    data.token,
+                    {
+                        autoSubscribe: false
+                    }
+                );
+
+                room.remoteParticipants.forEach(participant => {
+                    participant.trackPublications.forEach(publication => {
+                        addCameraPublication(publication);
+                    });
+                });
+
+                console.log(
+                    "Viewer connected with selective subscription!"
+                );
+
+                document.getElementById("status").innerText =
+                    "Connected! Waiting for cameras...";
+
+                console.log("Browser connected:", room.name);
+
+            }
+            catch (error) {
+
+                console.error(error);
+
+                document.getElementById("status").innerText =
+                    "Error: " + error.message;
+
+            }
+        }
+
+    </script>
+
+</body>
+</html>
