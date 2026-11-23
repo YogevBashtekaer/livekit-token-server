@@ -76,18 +76,28 @@
 
         <select id="qualitySelect">
             <option value="LOW">Low</option>
-            <option value="MEDIUM" selected>Medium</option>
-            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH" selected>High</option>
+            <option value="ULTRA">Ultra</option>
+        </select>
+    </div>
+
+
+    <div style="margin: 15px 0;">
+    <label for="fpsSelect">Stream FPS:</label>
+
+        <select id="fpsSelect">
+            <option value="15">15 FPS</option>
+            <option value="24">24 FPS</option>
+            <option value="30" selected>30 FPS</option>
+            <option value="45">45 FPS</option>
+            <option value="60">60 FPS</option>
         </select>
     </div>
 
     <div id="videoContainer"></div>
 
     <script>
-
-        const pageParams = new URLSearchParams(window.location.search);
-        const defaultRoom =
-            pageParams.get("room") || "unity-test-room";
 
         let room;
 
@@ -96,7 +106,9 @@
 
         let selectedCamera = null;
 
-        let selectedQuality = LivekitClient.VideoQuality.MEDIUM;
+        // Default Quality
+       // let selectedQuality = LivekitClient.VideoQuality.MEDIUM;
+       let selectedQuality = "HIGH";
 
         const videoContainer =
             document.getElementById("videoContainer");
@@ -107,9 +119,48 @@
         const qualitySelect =
             document.getElementById("qualitySelect");
 
+        const fpsSelect = document.getElementById("fpsSelect");
+
+        // =====================================
+        // QUALITY DROPDOWN EVENT
+        // =====================================
+
         qualitySelect.addEventListener("change", function () {
+
             changeStreamQuality(this.value);
+
         });
+
+        fpsSelect.addEventListener("change", async function () {
+
+            const fps = parseInt(this.value);
+
+            if (!room || !room.localParticipant) {
+                console.error("Viewer is not connected!");
+                return;
+            }
+
+            const message = {
+                type: "SET_FPS",
+                fps: fps
+            };
+
+            const encoder = new TextEncoder();
+
+            await room.localParticipant.publishData(
+                encoder.encode(JSON.stringify(message)),
+                {
+                    reliable: true,
+                    topic: "stream-control"
+                }
+            );
+
+            console.log("FPS change request sent:", fps);
+        });
+
+        // =====================================
+        // ADD CAMERA PUBLICATION
+        // =====================================
 
         function addCameraPublication(publication) {
 
@@ -144,8 +195,11 @@
 
             console.log("Camera available:", trackName);
 
+            // Automatically select Camera 1
             if (trackName === "camera-1" && selectedCamera === null) {
+
                 console.log("Auto selecting Camera 1...");
+
                 selectCamera("camera-1");
             }
 
@@ -156,12 +210,59 @@
             );
         }
 
+
+        // =====================================
+        // SELECT CAMERA
+        // =====================================
+
+       
+// function selectCamera(trackName) {
+
+//     console.log("Requested subscription:", trackName);
+
+//     // Unsubscribe previous camera
+//     if (selectedCamera && selectedCamera !== trackName) {
+
+//         const previousPublication =
+//             cameraPublications.get(selectedCamera);
+
+//         if (previousPublication) {
+//             previousPublication.setSubscribed(false);
+//         }
+//     }
+
+//     // Update selected camera
+//     selectedCamera = trackName;
+
+//     const publication = cameraPublications.get(trackName);
+
+//     if (!publication) {
+//         console.warn("Publication not found:", trackName);
+//         return;
+//     }
+
+//     // Apply previously selected quality
+//     publication.setVideoQuality(selectedQuality);
+
+//     console.log(
+//         "Applying saved quality:",
+//         selectedQuality,
+//         "Camera:",
+//         trackName
+//     );
+
+//     // Subscribe to selected camera
+//     publication.setSubscribed(true);
+
+//     console.log("Camera subscription requested:", trackName);
+// }
+
+
 function selectCamera(trackName) {
 
     console.log("Requested subscription:", trackName);
 
     if (selectedCamera && selectedCamera !== trackName) {
-
         const previousPublication =
             cameraPublications.get(selectedCamera);
 
@@ -179,46 +280,98 @@ function selectCamera(trackName) {
         return;
     }
 
-    publication.setVideoQuality(selectedQuality);
-
-    console.log(
-        "Applying saved quality:",
-        selectedQuality,
-        "Camera:",
-        trackName
-    );
-
+    // Subscribe first. Quality will be applied in TrackSubscribed.
     publication.setSubscribed(true);
 
     console.log("Camera subscription requested:", trackName);
 }
 
+function applySelectedQuality(publication) {
+
+    if (!publication || !publication.isSubscribed)
+        return;
+
+    if (selectedQuality === "ULTRA") {
+
+        // Request original 1920x1080 dimensions
+        publication.setVideoDimensions({
+            width: 1920,
+            height: 1080
+        });
+
+        console.log(
+            "ULTRA 1920x1080 requested:",
+            publication.trackName
+        );
+
+    } else {
+
+        const quality =
+            LivekitClient.VideoQuality[selectedQuality];
+
+        publication.setVideoQuality(quality);
+
+        console.log(
+            "Quality applied:",
+            selectedQuality,
+            publication.trackName
+        );
+    }
+}
+
+
+        // =====================================
+        // CHANGE STREAM QUALITY
+        // =====================================
+
+        // function changeStreamQuality(quality) {
+
+        //     selectedQuality =
+        //         LivekitClient.VideoQuality[quality];
+
+        //     console.log("Selected Quality:", quality);
+
+        //     if (!selectedCamera)
+        //         return;
+
+        //     const publication =
+        //         cameraPublications.get(selectedCamera);
+
+        //     if (publication && publication.isSubscribed) {
+
+        //         publication.setVideoQuality(selectedQuality);
+
+        //         console.log(
+        //             "Quality applied:",
+        //             quality,
+        //             "Camera:",
+        //             selectedCamera
+        //         );
+
+        //     }
+        // }
+
         function changeStreamQuality(quality) {
 
-            selectedQuality =
-                LivekitClient.VideoQuality[quality];
+    selectedQuality = quality;
 
-            console.log("Selected Quality:", quality);
+    console.log("Selected Quality:", selectedQuality);
 
-            if (!selectedCamera)
-                return;
+    if (!selectedCamera)
+        return;
 
-            const publication =
-                cameraPublications.get(selectedCamera);
+    const publication =
+        cameraPublications.get(selectedCamera);
 
-            if (publication && publication.isSubscribed) {
+    if (publication && publication.isSubscribed) {
+        applySelectedQuality(publication);
+    }
+}
 
-                publication.setVideoQuality(selectedQuality);
 
-                console.log(
-                    "Quality applied:",
-                    quality,
-                    "Camera:",
-                    selectedCamera
-                );
-
-            }
-        }
+        // =====================================
+        // DISPLAY CAMERA
+        // =====================================
 
         function displayCamera(track, publication) {
 
@@ -243,6 +396,11 @@ function selectCamera(trackName) {
             console.log("Displaying:", trackName);
         }
 
+
+        // =====================================
+        // CONNECT VIEWER
+        // =====================================
+
         async function connectViewer() {
 
             try {
@@ -250,37 +408,60 @@ function selectCamera(trackName) {
                 document.getElementById("status").innerText =
                     "Getting token...";
 
-                const response = await fetch("/token", {
+                const response = await fetch(
+                    "/token",
+                    {
                         method: "POST",
+
                         headers: {
                             "Content-Type": "application/json"
                         },
+
                         body: JSON.stringify({
-                            roomName: defaultRoom,
+
+                            roomName: "unity-test-room",
+
                             identity: "browser-viewer-" +
                                 Date.now() + "-" +
                                 Math.floor(Math.random() * 10000)
+
                         })
                     }
                 );
 
                 if (!response.ok) {
+
                     throw new Error("Token request failed");
+
                 }
 
                 const data = await response.json();
 
                 room = new LivekitClient.Room();
 
+
+                // =====================================
+                // TRACK PUBLISHED
+                // =====================================
+
                 room.on(
                     LivekitClient.RoomEvent.TrackPublished,
+
                     (publication, participant) => {
+
                         addCameraPublication(publication);
+
                     }
                 );
 
+
+                // =====================================
+                // TRACK SUBSCRIBED
+                // =====================================
+
                 room.on(
                     LivekitClient.RoomEvent.TrackSubscribed,
+
                     (track, publication, participant) => {
 
                         if (track.kind !== LivekitClient.Track.Kind.Video)
@@ -296,28 +477,22 @@ function selectCamera(trackName) {
                             publication.trackName
                         );
 
-                        if (
-                            publication.trackName === selectedCamera
-                        ) {
+                        // Apply currently selected quality
+                       if (publication.trackName === selectedCamera) {
 
-                            publication.setVideoQuality(selectedQuality);
+                            applySelectedQuality(publication);
 
-                            console.log(
-                                "Quality applied after subscription:",
-                                selectedQuality
-                            );
+                            setTimeout(() => {
 
-                           setTimeout(() => {
-    const settings = track.mediaStreamTrack.getSettings();
+                                const settings = track.mediaStreamTrack.getSettings();
 
-    console.log(
-        "ACTUAL RECEIVED RESOLUTION:",
-        publication.trackName,
-        settings.width + "x" + settings.height
-    );
+                                console.log(
+                                    "ACTUAL RECEIVED RESOLUTION:",
+                                    publication.trackName,
+                                    settings.width + "x" + settings.height
+                                );
 
-}, 2000);
-
+                            }, 2000);
                         }
 
                         displayCamera(track, publication);
@@ -325,8 +500,14 @@ function selectCamera(trackName) {
                     }
                 );
 
+
+                // =====================================
+                // TRACK UNSUBSCRIBED
+                // =====================================
+
                 room.on(
                     LivekitClient.RoomEvent.TrackUnsubscribed,
+
                     (track, publication, participant) => {
 
                         const trackName = publication.trackName;
@@ -341,11 +522,18 @@ function selectCamera(trackName) {
                         );
 
                         if (trackName === selectedCamera) {
+
                             videoContainer.innerHTML = "";
+
                         }
 
                     }
                 );
+
+
+                // =====================================
+                // CONNECT WITH AUTO SUBSCRIBE DISABLED
+                // =====================================
 
                 await room.connect(
                     data.serverUrl,
@@ -355,11 +543,18 @@ function selectCamera(trackName) {
                     }
                 );
 
+
+                // Get cameras published before browser connected
                 room.remoteParticipants.forEach(participant => {
+
                     participant.trackPublications.forEach(publication => {
+
                         addCameraPublication(publication);
+
                     });
+
                 });
+
 
                 console.log(
                     "Viewer connected with selective subscription!"
