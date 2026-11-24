@@ -97,9 +97,43 @@
 
     <div id="videoContainer"></div>
 
+    <div id="audioControls">
+    <button id="npcMuteButton" type="button">
+        Mute NPC / Unity Audio
+    </button>
+
+    <button id="micMuteButton" type="button">
+        Mute Convai Microphone
+    </button>
+</div>
+
+<div id="audioStatus">
+    Audio: waiting for tracks...
+</div>
+
+<div id="audioContainer" style="display:none;"></div>
+
     <script>
 
         let room;
+
+        const audioPublications = new Map();
+        const audioTracks = new Map();
+
+        const audioElements = {
+            npc: null,
+            microphone: null
+        };
+
+        const audioMuted = {
+            npc: false,
+            microphone: false
+        };
+
+        const audioStatus = document.getElementById("audioStatus");
+        const npcMuteButton = document.getElementById("npcMuteButton");
+        const micMuteButton = document.getElementById("micMuteButton");
+
 
         const cameraPublications = new Map();
         const cameraTracks = new Map();
@@ -210,6 +244,111 @@
             );
         }
 
+            function updateAudioControls() {
+
+                npcMuteButton.textContent = audioMuted.npc
+                    ? "Unmute NPC / Unity Audio"
+                    : "Mute NPC / Unity Audio";
+
+                micMuteButton.textContent = audioMuted.microphone
+                    ? "Unmute Convai Microphone"
+                    : "Mute Convai Microphone";
+
+                if (audioElements.npc)
+                    audioElements.npc.muted = audioMuted.npc;
+
+                if (audioElements.microphone)
+                    audioElements.microphone.muted = audioMuted.microphone;
+            }
+
+            npcMuteButton.addEventListener("click", () => {
+                audioMuted.npc = !audioMuted.npc;
+                updateAudioControls();
+            });
+
+            micMuteButton.addEventListener("click", () => {
+                audioMuted.microphone = !audioMuted.microphone;
+                updateAudioControls();
+            });
+
+
+            function addAudioPublication(publication) {
+
+                if (publication.kind !== LivekitClient.Track.Kind.Audio)
+                    return;
+
+                const trackName = publication.trackName;
+
+                if (trackName !== "npc-audio" &&
+                    trackName !== "microphone-audio")
+                    return;
+
+                audioPublications.set(trackName, publication);
+
+                console.log("AUDIO AVAILABLE:", trackName);
+
+                if (!publication.isSubscribed)
+                    publication.setSubscribed(true);
+            }
+
+
+            function displayAudioTrack(track, publication) {
+
+                const trackName = publication.trackName;
+
+                const role = trackName === "npc-audio"
+                    ? "npc"
+                    : trackName === "microphone-audio"
+                        ? "microphone"
+                        : null;
+
+                if (!role)
+                    return;
+
+                if (audioElements[role]) {
+                    audioElements[role].pause();
+                    audioElements[role].remove();
+                }
+
+                const audioElement = track.attach();
+
+                audioElement.autoplay = true;
+                audioElement.muted = audioMuted[role];
+                audioElement.style.display = "none";
+
+                document.getElementById("audioContainer")
+                    .appendChild(audioElement);
+
+                audioElements[role] = audioElement;
+                audioTracks.set(trackName, track);
+
+                updateAudioControls();
+
+                audioStatus.textContent = "Audio connected: " + trackName;
+
+                console.log("AUDIO SUBSCRIBED:", trackName);
+
+               audioElement.play().catch(error => {
+
+                console.warn("Audio autoplay blocked:", error);
+
+                audioStatus.textContent =
+                    "Audio subscribed. Click to enable audio.";
+
+                document.addEventListener("click", function enableAudio() {
+
+                    if (audioElements.npc)
+                        audioElements.npc.play().catch(console.warn);
+
+                    if (audioElements.microphone)
+                        audioElements.microphone.play().catch(console.warn);
+
+                    document.removeEventListener("click", enableAudio);
+
+                });
+
+                });
+            }
 
         // =====================================
         // SELECT CAMERA
@@ -408,8 +547,8 @@ function applySelectedQuality(publication) {
                 document.getElementById("status").innerText =
                     "Getting token...";
 
-                const response = await fetch(
-                    "/token",
+                //const response = await fetch("http://localhost:3000/token",
+                const response = await fetch("/token",
                     {
                         method: "POST",
 
@@ -450,6 +589,7 @@ function applySelectedQuality(publication) {
                     (publication, participant) => {
 
                         addCameraPublication(publication);
+                        addAudioPublication(publication);
 
                     }
                 );
@@ -463,6 +603,13 @@ function applySelectedQuality(publication) {
                     LivekitClient.RoomEvent.TrackSubscribed,
 
                     (track, publication, participant) => {
+
+                        if (track.kind === LivekitClient.Track.Kind.Audio) {
+
+                            displayAudioTrack(track, publication);
+
+                            return;
+                        }
 
                         if (track.kind !== LivekitClient.Track.Kind.Video)
                             return;
@@ -510,6 +657,31 @@ function applySelectedQuality(publication) {
 
                     (track, publication, participant) => {
 
+                        if (track.kind === LivekitClient.Track.Kind.Audio) {
+
+                            const trackName = publication.trackName;
+
+                            track.detach();
+
+                            audioTracks.delete(trackName);
+
+                            const role = trackName === "npc-audio"
+                                ? "npc"
+                                : trackName === "microphone-audio"
+                                    ? "microphone"
+                                    : null;
+
+                            if (role && audioElements[role]) {
+                                audioElements[role].pause();
+                                audioElements[role].remove();
+                                audioElements[role] = null;
+                            }
+
+                            audioStatus.textContent = "Audio disconnected: " + trackName;
+
+                            return;
+                        }
+
                         const trackName = publication.trackName;
 
                         track.detach();
@@ -551,6 +723,7 @@ function applySelectedQuality(publication) {
 
                         addCameraPublication(publication);
 
+                          addAudioPublication(publication);
                     });
 
                 });
