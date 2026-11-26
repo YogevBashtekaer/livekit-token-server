@@ -1,755 +1,328 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>LiveKit Unity Stream</title>
-
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-
-    <style>
-        body {
-            background: #181818;
-            color: white;
-            font-family: Arial;
-            text-align: center;
-        }
-
-        video {
-            width: 80%;
-            max-width: 1000px;
-            background: black;
-            margin-top: 20px;
-        }
-
-        button {
-            padding: 12px 25px;
-            cursor: pointer;
-        }
-
-        #cameraButtons {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin: 20px;
-            flex-wrap: wrap;
-        }
-
-        #cameraButtons button {
-            padding: 12px 22px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            background: #444;
-            color: white;
-        }
-
-        #cameraButtons button.active {
-            background: #1685ff;
-        }
-
-        #qualitySelect {
-            padding: 10px 20px;
-            border-radius: 5px;
-            margin-left: 8px;
-            cursor: pointer;
-        }
-
-        #videoContainer video {
-            width: 80%;
-            max-width: 1000px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unity Simulation Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#181818;color:#fff;font-family:Arial,sans-serif;text-align:center}
+header{padding:24px 16px 10px}
+h1{margin:0;font-size:28px}
+.subtitle{color:#aaa;margin-top:9px}
+.page{width:min(1100px,94%);margin:0 auto;padding:20px 0 40px}
+#sessionList{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:24px}
+.session-card{padding:22px;min-height:100px;border:1px solid #393939;border-radius:12px;background:#252525;color:white;text-align:left;cursor:pointer}
+.session-card:hover{background:#303030;border-color:#1685ff}
+.session-name{display:block;font-size:18px;font-weight:bold}
+.session-state{display:block;color:#70d890;font-size:13px;margin-top:10px}
+#emptyMessage{color:#aaa;margin-top:42px}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+button,select{padding:11px 17px;border:0;border-radius:7px;cursor:pointer;font-size:14px}
+button{background:#3b3b3b;color:white}
+button:hover{background:#505050}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px 18px;flex-wrap:wrap;padding:14px;margin:14px 0;background:#242424;border-radius:10px}
+.control-group{display:flex;align-items:center;gap:8px}
+select{background:#3b3b3b;color:white}
+#cameraButtons{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:16px 0}
+#cameraButtons button.active{background:#1685ff}
+#videoContainer{width:100%;min-height:220px;display:flex;justify-content:center;align-items:center;background:#080808;border-radius:10px;overflow:hidden}
+#videoContainer video{display:block;width:100%;max-height:72vh;object-fit:contain}
+#status,#audioStatus{color:#aaa;min-height:20px}
+#audioControls{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+#audioContainer{display:none}
+.hidden{display:none!important}
+@media(max-width:600px){h1{font-size:23px}.top-row{justify-content:center}#videoContainer{min-height:180px}}
+</style>
 </head>
-
 <body>
-
-    <h2>Unity LiveKit Stream</h2>
-
-    <button onclick="connectViewer()">Connect Viewer</button>
-
-    <p id="status">Waiting for connection...</p>
-
-    <div id="cameraButtons"></div>
-
-    <div style="margin: 15px 0;">
-        <label for="qualitySelect">Stream Quality:</label>
-
-        <select id="qualitySelect">
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH" selected>High</option>
-            <option value="ULTRA">Ultra</option>
-        </select>
-    </div>
-
-
-    <div style="margin: 15px 0;">
-    <label for="fpsSelect">Stream FPS:</label>
-
-        <select id="fpsSelect">
-            <option value="15">15 FPS</option>
-            <option value="24">24 FPS</option>
-            <option value="30" selected>30 FPS</option>
-            <option value="45">45 FPS</option>
-            <option value="60">60 FPS</option>
-        </select>
-    </div>
-
-    <div id="videoContainer"></div>
-
-    <div id="audioControls">
-    <button id="npcMuteButton" type="button">
-        Mute NPC / Unity Audio
-    </button>
-
-    <button id="micMuteButton" type="button">
-        Mute Convai Microphone
-    </button>
+<header>
+<h1>Unity Simulation Viewer</h1>
+<div class="subtitle">Select an active simulation to view its live stream</div>
+</header>
+<main class="page">
+<section id="homeScreen">
+<div class="top-row">
+<div id="sessionStatus">Checking active simulations...</div>
+<button type="button" onclick="loadSessions()">Refresh Sessions</button>
 </div>
+<div id="sessionList"></div>
+<div id="emptyMessage" class="hidden">No active simulations found. Start a Unity simulation and refresh.</div>
+</section>
 
-<div id="audioStatus">
-    Audio: waiting for tracks...
+<section id="videoScreen" class="hidden">
+<div class="top-row">
+<button type="button" onclick="backToSessions()">← Back to Sessions</button>
+<strong id="currentSessionName">Simulation</strong>
+<button type="button" onclick="disconnectViewer()">Disconnect</button>
 </div>
+<p id="status">Connecting...</p>
+<div id="cameraButtons"></div>
+<div class="controls">
+<div class="control-group"><label for="qualitySelect">Quality</label>
+<select id="qualitySelect">
+<option value="LOW">Low</option><option value="MEDIUM">Medium</option>
+<option value="HIGH" selected>High</option><option value="ULTRA">Ultra</option>
+</select></div>
+<div class="control-group"><label for="fpsSelect">FPS</label>
+<select id="fpsSelect">
+<option value="15">15 FPS</option><option value="24">24 FPS</option>
+<option value="30" selected>30 FPS</option><option value="45">45 FPS</option>
+<option value="60">60 FPS</option>
+</select></div>
+</div>
+<div id="videoContainer"></div>
+<div class="controls" id="audioControls">
+<button id="npcMuteButton" type="button">Mute NPC / Unity Audio</button>
+<button id="micMuteButton" type="button">Mute Convai Microphone</button>
+</div>
+<div id="audioStatus">Audio: waiting for tracks...</div>
+<div id="audioContainer"></div>
+</section>
+</main>
 
-<div id="audioContainer" style="display:none;"></div>
+<script>
+const API_BASE = "";
+let room = null;
+let selectedCamera = null;
+let selectedQuality = "HIGH";
 
-    <script>
+const cameraPublications = new Map();
+const cameraTracks = new Map();
+const audioPublications = new Map();
+const audioTracks = new Map();
+const audioElements = {npc:null,microphone:null};
+const audioMuted = {npc:false,microphone:false};
 
-        let room;
+const homeScreen=document.getElementById("homeScreen");
+const videoScreen=document.getElementById("videoScreen");
+const sessionList=document.getElementById("sessionList");
+const sessionStatus=document.getElementById("sessionStatus");
+const emptyMessage=document.getElementById("emptyMessage");
+const videoContainer=document.getElementById("videoContainer");
+const cameraButtons=document.getElementById("cameraButtons");
+const audioStatus=document.getElementById("audioStatus");
+const npcMuteButton=document.getElementById("npcMuteButton");
+const micMuteButton=document.getElementById("micMuteButton");
+const qualitySelect=document.getElementById("qualitySelect");
+const fpsSelect=document.getElementById("fpsSelect");
 
-        const audioPublications = new Map();
-        const audioTracks = new Map();
+async function loadSessions(){
+    try{
+        const response=await fetch(`${API_BASE}/sessions`);
+        if(!response.ok) throw new Error("Could not load sessions");
+        const data=await response.json();
+        const sessions=data.sessions||[];
+        sessionList.innerHTML="";
+        emptyMessage.classList.toggle("hidden",sessions.length!==0);
+        sessionStatus.textContent=`${sessions.length} active simulation(s)`;
+        sessions.forEach(session=>{
+            const button=document.createElement("button");
+            button.type="button";
+            button.className="session-card";
+            button.innerHTML='<span class="session-name"></span><span class="session-state">● Live simulation</span>';
+            button.querySelector(".session-name").textContent=session.sessionName;
+            button.addEventListener("click",()=>openSimulation(session));
+            sessionList.appendChild(button);
+        });
+    }catch(error){
+        sessionStatus.textContent="Unable to contact session server.";
+        emptyMessage.classList.remove("hidden");
+        emptyMessage.textContent=error.message;
+        console.error(error);
+    }
+}
 
-        const audioElements = {
-            npc: null,
-            microphone: null
-        };
+async function openSimulation(session){
+    if(room) await disconnectRoom();
+    homeScreen.classList.add("hidden");
+    videoScreen.classList.remove("hidden");
+    document.getElementById("currentSessionName").textContent=session.sessionName;
+    document.getElementById("status").textContent="Getting stream token...";
+    resetStreamUI();
+    await connectViewer(session.roomName);
+}
 
-        const audioMuted = {
-            npc: false,
-            microphone: false
-        };
+function resetStreamUI(){
+    selectedCamera=null;
+    selectedQuality=qualitySelect.value;
+    cameraPublications.clear();cameraTracks.clear();
+    audioPublications.clear();audioTracks.clear();
+    cameraButtons.innerHTML="";videoContainer.innerHTML="";
+    audioStatus.textContent="Audio: waiting for tracks...";
+    for(const role of ["npc","microphone"]){
+        if(audioElements[role]){audioElements[role].pause();audioElements[role].remove();audioElements[role]=null;}
+        audioMuted[role]=false;
+    }
+    updateAudioControls();
+}
 
-        const audioStatus = document.getElementById("audioStatus");
-        const npcMuteButton = document.getElementById("npcMuteButton");
-        const micMuteButton = document.getElementById("micMuteButton");
+async function connectViewer(roomName){
+    try{
+        const response=await fetch(`${API_BASE}/token`,{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({roomName,identity:"browser-viewer-"+Date.now()+"-"+Math.floor(Math.random()*10000)})
+        });
+        if(!response.ok) throw new Error("Token request failed");
+        const data=await response.json();
+        room=new LivekitClient.Room();
 
-
-        const cameraPublications = new Map();
-        const cameraTracks = new Map();
-
-        let selectedCamera = null;
-
-        // Default Quality
-       // let selectedQuality = LivekitClient.VideoQuality.MEDIUM;
-       let selectedQuality = "HIGH";
-
-        const videoContainer =
-            document.getElementById("videoContainer");
-
-        const cameraButtons =
-            document.getElementById("cameraButtons");
-
-        const qualitySelect =
-            document.getElementById("qualitySelect");
-
-        const fpsSelect = document.getElementById("fpsSelect");
-
-        // =====================================
-        // QUALITY DROPDOWN EVENT
-        // =====================================
-
-        qualitySelect.addEventListener("change", function () {
-
-            changeStreamQuality(this.value);
-
+        room.on(LivekitClient.RoomEvent.TrackPublished,publication=>{
+            addCameraPublication(publication);addAudioPublication(publication);
+        });
+        room.on(LivekitClient.RoomEvent.TrackSubscribed,(track,publication)=>{
+            if(track.kind===LivekitClient.Track.Kind.Audio){displayAudioTrack(track,publication);return;}
+            if(track.kind!==LivekitClient.Track.Kind.Video)return;
+            cameraTracks.set(publication.trackName,track);
+            if(publication.trackName===selectedCamera)applySelectedQuality(publication);
+            displayCamera(track,publication);
+        });
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed,(track,publication)=>{
+            const name=publication.trackName;track.detach();
+            if(track.kind===LivekitClient.Track.Kind.Audio){
+                audioTracks.delete(name);
+                const role=name==="npc-audio"?"npc":name==="microphone-audio"?"microphone":null;
+                if(role&&audioElements[role]){audioElements[role].pause();audioElements[role].remove();audioElements[role]=null;}
+                audioStatus.textContent="Audio disconnected: "+name;return;
+            }
+            cameraTracks.delete(name);
+            if(name===selectedCamera)videoContainer.innerHTML="";
+        });
+        room.on(LivekitClient.RoomEvent.Disconnected,()=>{
+            document.getElementById("status").textContent="Disconnected from stream.";
         });
 
-        fpsSelect.addEventListener("change", async function () {
-
-            const fps = parseInt(this.value);
-
-            if (!room || !room.localParticipant) {
-                console.error("Viewer is not connected!");
-                return;
-            }
-
-            const message = {
-                type: "SET_FPS",
-                fps: fps
-            };
-
-            const encoder = new TextEncoder();
-
-            await room.localParticipant.publishData(
-                encoder.encode(JSON.stringify(message)),
-                {
-                    reliable: true,
-                    topic: "stream-control"
-                }
-            );
-
-            console.log("FPS change request sent:", fps);
+        await room.connect(data.serverUrl,data.token,{autoSubscribe:false});
+        room.remoteParticipants.forEach(participant=>{
+            participant.trackPublications.forEach(publication=>{
+                addCameraPublication(publication);addAudioPublication(publication);
+            });
         });
-
-        // =====================================
-        // ADD CAMERA PUBLICATION
-        // =====================================
-
-        function addCameraPublication(publication) {
-
-            if (publication.kind !== LivekitClient.Track.Kind.Video)
-                return;
-
-            const trackName = publication.trackName;
-
-            if (!trackName || !trackName.startsWith("camera-"))
-                return;
-
-            cameraPublications.set(trackName, publication);
-
-            const cameraNumber =
-                trackName.replace("camera-", "");
-
-            let button =
-                document.getElementById("btn-" + trackName);
-
-            if (!button) {
-
-                button = document.createElement("button");
-
-                button.id = "btn-" + trackName;
-
-                button.textContent = "Camera " + cameraNumber;
-
-                button.onclick = () => selectCamera(trackName);
-
-                cameraButtons.appendChild(button);
-            }
-
-            console.log("Camera available:", trackName);
-
-            // Automatically select Camera 1
-            if (trackName === "camera-1" && selectedCamera === null) {
-
-                console.log("Auto selecting Camera 1...");
-
-                selectCamera("camera-1");
-            }
-
-            console.log(
-                "Camera:", trackName,
-                "Simulcast:", publication.simulcasted,
-                "Dimensions:", publication.dimensions
-            );
-        }
-
-            function updateAudioControls() {
-
-                npcMuteButton.textContent = audioMuted.npc
-                    ? "Unmute NPC / Unity Audio"
-                    : "Mute NPC / Unity Audio";
-
-                micMuteButton.textContent = audioMuted.microphone
-                    ? "Unmute Convai Microphone"
-                    : "Mute Convai Microphone";
-
-                if (audioElements.npc)
-                    audioElements.npc.muted = audioMuted.npc;
-
-                if (audioElements.microphone)
-                    audioElements.microphone.muted = audioMuted.microphone;
-            }
-
-            npcMuteButton.addEventListener("click", () => {
-                audioMuted.npc = !audioMuted.npc;
-                updateAudioControls();
-            });
-
-            micMuteButton.addEventListener("click", () => {
-                audioMuted.microphone = !audioMuted.microphone;
-                updateAudioControls();
-            });
-
-
-            function addAudioPublication(publication) {
-
-                if (publication.kind !== LivekitClient.Track.Kind.Audio)
-                    return;
-
-                const trackName = publication.trackName;
-
-                if (trackName !== "npc-audio" &&
-                    trackName !== "microphone-audio")
-                    return;
-
-                audioPublications.set(trackName, publication);
-
-                console.log("AUDIO AVAILABLE:", trackName);
-
-                if (!publication.isSubscribed)
-                    publication.setSubscribed(true);
-            }
-
-
-            function displayAudioTrack(track, publication) {
-
-                const trackName = publication.trackName;
-
-                const role = trackName === "npc-audio"
-                    ? "npc"
-                    : trackName === "microphone-audio"
-                        ? "microphone"
-                        : null;
-
-                if (!role)
-                    return;
-
-                if (audioElements[role]) {
-                    audioElements[role].pause();
-                    audioElements[role].remove();
-                }
-
-                const audioElement = track.attach();
-
-                audioElement.autoplay = true;
-                audioElement.muted = audioMuted[role];
-                audioElement.style.display = "none";
-
-                document.getElementById("audioContainer")
-                    .appendChild(audioElement);
-
-                audioElements[role] = audioElement;
-                audioTracks.set(trackName, track);
-
-                updateAudioControls();
-
-                audioStatus.textContent = "Audio connected: " + trackName;
-
-                console.log("AUDIO SUBSCRIBED:", trackName);
-
-               audioElement.play().catch(error => {
-
-                console.warn("Audio autoplay blocked:", error);
-
-                audioStatus.textContent =
-                    "Audio subscribed. Click to enable audio.";
-
-                document.addEventListener("click", function enableAudio() {
-
-                    if (audioElements.npc)
-                        audioElements.npc.play().catch(console.warn);
-
-                    if (audioElements.microphone)
-                        audioElements.microphone.play().catch(console.warn);
-
-                    document.removeEventListener("click", enableAudio);
-
-                });
-
-                });
-            }
-
-        // =====================================
-        // SELECT CAMERA
-        // =====================================
-
-       
-// function selectCamera(trackName) {
-
-//     console.log("Requested subscription:", trackName);
-
-//     // Unsubscribe previous camera
-//     if (selectedCamera && selectedCamera !== trackName) {
-
-//         const previousPublication =
-//             cameraPublications.get(selectedCamera);
-
-//         if (previousPublication) {
-//             previousPublication.setSubscribed(false);
-//         }
-//     }
-
-//     // Update selected camera
-//     selectedCamera = trackName;
-
-//     const publication = cameraPublications.get(trackName);
-
-//     if (!publication) {
-//         console.warn("Publication not found:", trackName);
-//         return;
-//     }
-
-//     // Apply previously selected quality
-//     publication.setVideoQuality(selectedQuality);
-
-//     console.log(
-//         "Applying saved quality:",
-//         selectedQuality,
-//         "Camera:",
-//         trackName
-//     );
-
-//     // Subscribe to selected camera
-//     publication.setSubscribed(true);
-
-//     console.log("Camera subscription requested:", trackName);
-// }
-
-
-function selectCamera(trackName) {
-
-    console.log("Requested subscription:", trackName);
-
-    if (selectedCamera && selectedCamera !== trackName) {
-        const previousPublication =
-            cameraPublications.get(selectedCamera);
-
-        if (previousPublication) {
-            previousPublication.setSubscribed(false);
-        }
+        document.getElementById("status").textContent="Connected. Waiting for cameras...";
+    }catch(error){
+        console.error(error);
+        document.getElementById("status").textContent="Error: "+error.message;
     }
+}
 
-    selectedCamera = trackName;
-
-    const publication = cameraPublications.get(trackName);
-
-    if (!publication) {
-        console.warn("Publication not found:", trackName);
-        return;
+function addCameraPublication(publication){
+    if(publication.kind!==LivekitClient.Track.Kind.Video)return;
+    const name=publication.trackName;
+    if(!name||!name.startsWith("camera-"))return;
+    cameraPublications.set(name,publication);
+    const number=name.replace("camera-","");
+    let button=document.getElementById("btn-"+name);
+    if(!button){
+        button=document.createElement("button");button.id="btn-"+name;
+        button.textContent="Camera "+number;
+        button.addEventListener("click",()=>selectCamera(name));
+        cameraButtons.appendChild(button);
     }
+    if(name==="camera-1"&&selectedCamera===null)selectCamera(name);
+}
 
-    // Subscribe first. Quality will be applied in TrackSubscribed.
+function selectCamera(name){
+    if(selectedCamera&&selectedCamera!==name){
+        const previous=cameraPublications.get(selectedCamera);
+        if(previous)previous.setSubscribed(false);
+    }
+    selectedCamera=name;
+    document.querySelectorAll("#cameraButtons button").forEach(button=>{
+        button.classList.toggle("active",button.id==="btn-"+name);
+    });
+    const publication=cameraPublications.get(name);
+    if(!publication)return;
     publication.setSubscribed(true);
-
-    console.log("Camera subscription requested:", trackName);
+    const existing=cameraTracks.get(name);
+    if(existing){applySelectedQuality(publication);displayCamera(existing,publication);}
 }
 
-function applySelectedQuality(publication) {
-
-    if (!publication || !publication.isSubscribed)
-        return;
-
-    if (selectedQuality === "ULTRA") {
-
-        // Request original 1920x1080 dimensions
-        publication.setVideoDimensions({
-            width: 1920,
-            height: 1080
-        });
-
-        console.log(
-            "ULTRA 1920x1080 requested:",
-            publication.trackName
-        );
-
-    } else {
-
-        const quality =
-            LivekitClient.VideoQuality[selectedQuality];
-
-        publication.setVideoQuality(quality);
-
-        console.log(
-            "Quality applied:",
-            selectedQuality,
-            publication.trackName
-        );
-    }
+function applySelectedQuality(publication){
+    if(!publication||!publication.isSubscribed)return;
+    if(selectedQuality==="ULTRA")publication.setVideoDimensions({width:1920,height:1080});
+    else publication.setVideoQuality(LivekitClient.VideoQuality[selectedQuality]);
 }
 
-
-        // =====================================
-        // CHANGE STREAM QUALITY
-        // =====================================
-
-        // function changeStreamQuality(quality) {
-
-        //     selectedQuality =
-        //         LivekitClient.VideoQuality[quality];
-
-        //     console.log("Selected Quality:", quality);
-
-        //     if (!selectedCamera)
-        //         return;
-
-        //     const publication =
-        //         cameraPublications.get(selectedCamera);
-
-        //     if (publication && publication.isSubscribed) {
-
-        //         publication.setVideoQuality(selectedQuality);
-
-        //         console.log(
-        //             "Quality applied:",
-        //             quality,
-        //             "Camera:",
-        //             selectedCamera
-        //         );
-
-        //     }
-        // }
-
-        function changeStreamQuality(quality) {
-
-    selectedQuality = quality;
-
-    console.log("Selected Quality:", selectedQuality);
-
-    if (!selectedCamera)
-        return;
-
-    const publication =
-        cameraPublications.get(selectedCamera);
-
-    if (publication && publication.isSubscribed) {
-        applySelectedQuality(publication);
-    }
+function changeStreamQuality(quality){
+    selectedQuality=quality;
+    if(!selectedCamera)return;
+    const publication=cameraPublications.get(selectedCamera);
+    if(publication&&publication.isSubscribed)applySelectedQuality(publication);
 }
 
-
-        // =====================================
-        // DISPLAY CAMERA
-        // =====================================
-
-        function displayCamera(track, publication) {
-
-            const trackName = publication.trackName;
-
-            if (trackName !== selectedCamera)
-                return;
-
-            videoContainer.innerHTML = "";
-
-            const videoElement = track.attach();
-
-            videoElement.autoplay = true;
-            videoElement.playsInline = true;
-
-            videoElement.style.width = "100%";
-            videoElement.style.height = "auto";
-            videoElement.style.transform = "scaleY(-1)";
-
-            videoContainer.appendChild(videoElement);
-
-            console.log("Displaying:", trackName);
-        }
-
-
-        // =====================================
-        // CONNECT VIEWER
-        // =====================================
-
-        async function connectViewer() {
-
-            try {
-
-                document.getElementById("status").innerText =
-                    "Getting token...";
-
-                //const response = await fetch("http://localhost:3000/token",
-                const response = await fetch("/token",
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-
-                        body: JSON.stringify({
-
-                            roomName: "unity-test-room",
-
-                            identity: "browser-viewer-" +
-                                Date.now() + "-" +
-                                Math.floor(Math.random() * 10000)
-
-                        })
-                    }
-                );
-
-                if (!response.ok) {
-
-                    throw new Error("Token request failed");
-
-                }
-
-                const data = await response.json();
-
-                room = new LivekitClient.Room();
-
-
-                // =====================================
-                // TRACK PUBLISHED
-                // =====================================
-
-                room.on(
-                    LivekitClient.RoomEvent.TrackPublished,
-
-                    (publication, participant) => {
-
-                        addCameraPublication(publication);
-                        addAudioPublication(publication);
-
-                    }
-                );
-
-
-                // =====================================
-                // TRACK SUBSCRIBED
-                // =====================================
-
-                room.on(
-                    LivekitClient.RoomEvent.TrackSubscribed,
-
-                    (track, publication, participant) => {
-
-                        if (track.kind === LivekitClient.Track.Kind.Audio) {
-
-                            displayAudioTrack(track, publication);
-
-                            return;
-                        }
-
-                        if (track.kind !== LivekitClient.Track.Kind.Video)
-                            return;
-
-                        cameraTracks.set(
-                            publication.trackName,
-                            track
-                        );
-
-                        console.log(
-                            "SUBSCRIBED:",
-                            publication.trackName
-                        );
-
-                        // Apply currently selected quality
-                       if (publication.trackName === selectedCamera) {
-
-                            applySelectedQuality(publication);
-
-                            setTimeout(() => {
-
-                                const settings = track.mediaStreamTrack.getSettings();
-
-                                console.log(
-                                    "ACTUAL RECEIVED RESOLUTION:",
-                                    publication.trackName,
-                                    settings.width + "x" + settings.height
-                                );
-
-                            }, 2000);
-                        }
-
-                        displayCamera(track, publication);
-
-                    }
-                );
-
-
-                // =====================================
-                // TRACK UNSUBSCRIBED
-                // =====================================
-
-                room.on(
-                    LivekitClient.RoomEvent.TrackUnsubscribed,
-
-                    (track, publication, participant) => {
-
-                        if (track.kind === LivekitClient.Track.Kind.Audio) {
-
-                            const trackName = publication.trackName;
-
-                            track.detach();
-
-                            audioTracks.delete(trackName);
-
-                            const role = trackName === "npc-audio"
-                                ? "npc"
-                                : trackName === "microphone-audio"
-                                    ? "microphone"
-                                    : null;
-
-                            if (role && audioElements[role]) {
-                                audioElements[role].pause();
-                                audioElements[role].remove();
-                                audioElements[role] = null;
-                            }
-
-                            audioStatus.textContent = "Audio disconnected: " + trackName;
-
-                            return;
-                        }
-
-                        const trackName = publication.trackName;
-
-                        track.detach();
-
-                        cameraTracks.delete(trackName);
-
-                        console.log(
-                            "UNSUBSCRIBED:",
-                            trackName
-                        );
-
-                        if (trackName === selectedCamera) {
-
-                            videoContainer.innerHTML = "";
-
-                        }
-
-                    }
-                );
-
-
-                // =====================================
-                // CONNECT WITH AUTO SUBSCRIBE DISABLED
-                // =====================================
-
-                await room.connect(
-                    data.serverUrl,
-                    data.token,
-                    {
-                        autoSubscribe: false
-                    }
-                );
-
-
-                // Get cameras published before browser connected
-                room.remoteParticipants.forEach(participant => {
-
-                    participant.trackPublications.forEach(publication => {
-
-                        addCameraPublication(publication);
-
-                          addAudioPublication(publication);
-                    });
-
-                });
-
-
-                console.log(
-                    "Viewer connected with selective subscription!"
-                );
-
-                document.getElementById("status").innerText =
-                    "Connected! Waiting for cameras...";
-
-                console.log("Browser connected:", room.name);
-
-            }
-            catch (error) {
-
-                console.error(error);
-
-                document.getElementById("status").innerText =
-                    "Error: " + error.message;
-
-            }
-        }
-
-    </script>
-
+function displayCamera(track,publication){
+    if(publication.trackName!==selectedCamera)return;
+    videoContainer.innerHTML="";
+    const element=track.attach();
+    element.autoplay=true;element.playsInline=true;
+    element.style.width="100%";element.style.height="auto";
+    element.style.transform="scaleY(-1)";
+    videoContainer.appendChild(element);
+    document.getElementById("status").textContent="Live: "+publication.trackName;
+}
+
+function addAudioPublication(publication){
+    if(publication.kind!==LivekitClient.Track.Kind.Audio)return;
+    const name=publication.trackName;
+    if(name!=="npc-audio"&&name!=="microphone-audio")return;
+    audioPublications.set(name,publication);
+    if(!publication.isSubscribed)publication.setSubscribed(true);
+}
+
+function displayAudioTrack(track,publication){
+    const name=publication.trackName;
+    const role=name==="npc-audio"?"npc":name==="microphone-audio"?"microphone":null;
+    if(!role)return;
+    if(audioElements[role]){audioElements[role].pause();audioElements[role].remove();}
+    const element=track.attach();
+    element.autoplay=true;element.muted=audioMuted[role];element.style.display="none";
+    document.getElementById("audioContainer").appendChild(element);
+    audioElements[role]=element;audioTracks.set(name,track);
+    updateAudioControls();audioStatus.textContent="Audio connected: "+name;
+    element.play().catch(error=>{
+        console.warn("Audio autoplay blocked:",error);
+        audioStatus.textContent="Audio connected. Tap the page to enable audio.";
+    });
+}
+
+function updateAudioControls(){
+    npcMuteButton.textContent=audioMuted.npc?"Unmute NPC / Unity Audio":"Mute NPC / Unity Audio";
+    micMuteButton.textContent=audioMuted.microphone?"Unmute Convai Microphone":"Mute Convai Microphone";
+    if(audioElements.npc)audioElements.npc.muted=audioMuted.npc;
+    if(audioElements.microphone)audioElements.microphone.muted=audioMuted.microphone;
+}
+npcMuteButton.addEventListener("click",()=>{audioMuted.npc=!audioMuted.npc;updateAudioControls();});
+micMuteButton.addEventListener("click",()=>{audioMuted.microphone=!audioMuted.microphone;updateAudioControls();});
+qualitySelect.addEventListener("change",()=>changeStreamQuality(qualitySelect.value));
+
+fpsSelect.addEventListener("change",async()=>{
+    const fps=parseInt(fpsSelect.value,10);
+    if(!room||!room.localParticipant){console.error("Viewer is not connected!");return;}
+    const message={type:"SET_FPS",fps};
+    try{
+        await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(message)),
+            {reliable:true,topic:"stream-control"});
+        console.log("FPS change request sent:",fps);
+    }catch(error){console.error("FPS request failed:",error);}
+});
+
+async function disconnectRoom(){
+    if(room){const oldRoom=room;room=null;try{await oldRoom.disconnect();}catch(error){console.warn(error);}}
+    resetStreamUI();
+}
+async function disconnectViewer(){
+    await disconnectRoom();
+    document.getElementById("status").textContent="Disconnected.";
+}
+async function backToSessions(){
+    await disconnectRoom();
+    videoScreen.classList.add("hidden");homeScreen.classList.remove("hidden");
+    loadSessions();
+}
+
+loadSessions();
+setInterval(()=>{if(videoScreen.classList.contains("hidden"))loadSessions();},3000);
+</script>
 </body>
 </html>
